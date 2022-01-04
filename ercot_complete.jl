@@ -25,19 +25,6 @@ mutable struct evaluation
     CAPACITY
     UNSERVED_DEM
     CONS_SURPLUS
-    # NET_REVENUE_UNIT1
-    # NET_REVENUE_UNIT2
-    # AVE_REVENUE1
-    # AVE_REVENUE2
-    # ENERGY_PRICE
-    # IRR
-    # INC_IRR
-    # const1
-    # const2
-    # const3
-    # const4
-    # const5
-    # const6
     EXPECTED_UNSERVED_DEM
     CONS_total_SURPLUS
     model_SURPLUS
@@ -48,25 +35,11 @@ function init_evaluation(param::Dict)
     CAPACITY = Dict(g => 0.0 for g in param["GENS"])
     UNSERVED_DEM = Dict((r,s) => 0.0 for r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
     CONS_SURPLUS = Dict((r,s)=>0.0 for r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
-    # NET_REVENUE_UNIT1= Dict((g,r,s)=>0.0 for g in param["GENS"], r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
-    # NET_REVENUE_UNIT2= Dict((g,r,s)=>0.0 for g in param["GENS"], r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
-    # AVE_REVENUE1 = Dict(g => 0.0 for g in param["GENS"])
-    # AVE_REVENUE2 = Dict(g => 0.0 for g in param["GENS"])
-    # ENERGY_PRICE = Dict((t,r,s) => 0.0 for t in 1:param["N_SEGMENTS"], r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
-    # IRR = Dict(g => 0.0 for g in param["GENS"])
-    # INC_IRR = Dict(g => 0.0 for g in param["GENS"])
     EXPECTED_UNSERVED_DEM = 0.0
     CONS_total_SURPLUS = 0.0
     model_SURPLUS = 0.0
     Objective = 0.0
-    # const1 = 0
-    # const2 = Dict((r,s) => 0.0 for r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
-    # const3 = Dict((t,r,s) => 0.0 for t in 1:param["N_SEGMENTS"], r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
-    # const4 = Dict((t,r,s) => 0.0 for t in 1:param["N_SEGMENTS"], r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
-    # const5 = Dict(g => 0.0 for g in param["GENS"])
-    # const6 = Dict((t,r,s) => 0.0 for t in 1:param["N_SEGMENTS"], r in 1:param["N_PROFILES"], s in 1:param["N_SHIFTERS"])
-    # return evaluation(CAPACITY, UNSERVED_DEM, CONS_SURPLUS, NET_REVENUE_UNIT1,NET_REVENUE_UNIT2, AVE_REVENUE1,
-    #     AVE_REVENUE2, ENERGY_PRICE, IRR, INC_IRR, CONS_total_SURPLUS, model_SURPLUS, Objective)
+
     return evaluation(CAPACITY, UNSERVED_DEM, CONS_SURPLUS, EXPECTED_UNSERVED_DEM, CONS_total_SURPLUS, model_SURPLUS, Objective)
 end
 
@@ -115,16 +88,10 @@ function make_dispatch_model(set::sets, param::parameters)
     @variable(model, var)
 
     @expression(model, surplus[r in set.PROFILES, s in set.SHIFTERS],
-        # NB: Hardcode param.LOAD_FLEX[2] = 1.0 to prevent param.LOAD_FLEX[1] = 0. This does not influence results because dem_served_flex = 0.
         (-sum(param.INV_COST[g] * capacity[g] for g in set.GENS)
         + sum(param.VOLL * param.DURATION[t] * (dem_served_fix[t,r,s] + dem_served_flex[t,r,s] - (0.5*(dem_served_flex[t,r,s]^2)/param.LOAD_FLEX)) for t in set.TIME_BLOCKS)
         - sum(param.FUEL_PRICE[g] * param.DURATION[t] * prod[g,t,r,s] for g in set.GENS, t in set.TIME_BLOCKS))
         )
-
-    # @expression(model, surplus[r in set.PROFILES, s in set.SHIFTERS],
-    #     (sum(param.VOLL * param.DURATION[t] * (dem_served_fix[t,r,s] + dem_served_flex[t,r,s] - (0.5*(dem_served_flex[t,r,s]^2)/param.LOAD_FLEX)) for t in set.TIME_BLOCKS)
-    #     - sum(param.FUEL_PRICE[g] * param.DURATION[t] * prod[g,t,r,s] for g in set.GENS, t in set.TIME_BLOCKS))
-    #     )
 
     @objective(model, Max,
         ((1 - param.β) * (var - (1 / param.α)*(sum(param.SCEN_PROB[r,s]*surplus_aux[r,s] for r in set.PROFILES, s in set.SHIFTERS)))
@@ -163,34 +130,9 @@ function solve_evaluation(set, param, evalu)
     model = solve_dispatch(set, param)
     evalu.CAPACITY = Dict(g => value(model[:capacity][g]) for g in set.GENS)
     for r in set.PROFILES, s in set.SHIFTERS
-    # #     for t in set.TIME_BLOCKS
-    # #         evalu.ENERGY_PRICE[t,r,s] = shadow_price(model[:energy_balance][t,r,s])/(param.DURATION[t]*param.SCEN_PROB[r,s])
-    # #         # evalu.ENERGY_PRICE[t,r,s] = (shadow_price(model[:energy_balance][t,r,s])-shadow_price(model[:max_prod]["CCGT",t,r,s]))/(param.DURATION[t]*param.SCEN_PROB[r,s]*param.β)
-    # #     end
-    evalu.UNSERVED_DEM[r,s] = (sum(param.LOAD_FIX[t] -  value(model[:dem_served_fix][t,r,s]) for t in set.TIME_BLOCKS))
-    #     evalu.CONS_SURPLUS[r,s] = sum(param.DURATION[t] * param.VOLL * (value(model[:dem_served_fix][t,r,s]) + value(model[:dem_served_flex][t,r,s])  - 0.5 * (value(model[:dem_served_flex][t,r,s])^2) / param.LOAD_FLEX) for t in set.TIME_BLOCKS)
-    #     - sum(param.DURATION[t] * shadow_price(model[:energy_balance][t,r,s]) * (value(model[:dem_served_fix][t,r,s])  + value(model[:dem_served_flex][t,r,s]) + param.LOAD_SHIFT[s]) for t in set.TIME_BLOCKS)
-    # #     for g in set.GENS
-    # #         # evalu.NET_REVENUE_UNIT1[g,r,s] = (sum(param.DURATION[t]*(shadow_price(model[:energy_balance][t,r,s]) - param.FUEL_PRICE[g])*value(model[:prod][g,t,r,s]) for t in set.TIME_BLOCKS)) / value(model[:capacity][g])
-    # #         evalu.NET_REVENUE_UNIT1[g,r,s] = (sum((evalu.ENERGY_PRICE[t,r,s] - param.FUEL_PRICE[g])*param.DURATION[t]*value(model[:prod][g,t,r,s]) for t in set.TIME_BLOCKS)) / value(model[:capacity][g])
-    # #         evalu.NET_REVENUE_UNIT2[g,r,s] = sum(shadow_price(model[:max_prod][g,t,r,s])*param.AVAILABILITY[g,r,t] for t in set.TIME_BLOCKS)
-    # #     end
+        evalu.UNSERVED_DEM[r,s] = (sum(param.LOAD_FIX[t] -  value(model[:dem_served_fix][t,r,s]) for t in set.TIME_BLOCKS))
     end
-    # for g in set.GENS
-    #     evalu.AVE_REVENUE1[g] = sum(param.SCEN_PROB[r,s]*evalu.NET_REVENUE_UNIT1[g,r,s] for r in set.PROFILES, s in set.SHIFTERS)
-    #     evalu.AVE_REVENUE2[g] = sum(evalu.NET_REVENUE_UNIT2[g,r,s] for r in set.PROFILES, s in set.SHIFTERS)
-    #     # evalu.const5[g] = - param.INV_COST[g] + sum(shadow_price(model[:max_prod][g,t,r,s])*param.AVAILABILITY[g,r,t] for t in set.TIME_BLOCKS, r in set.PROFILES, s in set.SHIFTERS)
-    # end
-    # evalu.const1 = 1-param.β - sum(shadow_price(model[:risk_set][r,s]) for r in set.PROFILES, s in set.SHIFTERS)
-    # for r in set.PROFILES, s in set.SHIFTERS
-    #     evalu.const2[r,s] = ((param.β-1)/param.α)*param.SCEN_PROB[r,s]+ shadow_price(model[:risk_set][r,s]) + reduced_cost(model[:surplus_aux][r,s])
-    #     for t in set.TIME_BLOCKS
-    #         evalu.const3[t,r,s] = shadow_price(model[:energy_balance][t,r,s])- shadow_price(model[:max_prod]["CCGT",t,r,s]) + reduced_cost(model[:prod]["CCGT",t,r,s]) - param.SCEN_PROB[r,s]*param.DURATION[t]*param.FUEL_PRICE["CCGT"]
-    #         evalu.const4[t,r,s] = param.SCEN_PROB[r,s]*param.DURATION[t]*param.VOLL-shadow_price(model[:energy_balance][t,r,s])- shadow_price(model[:max_dem_served_fix][t,r,s])+reduced_cost(model[:dem_served_fix][t,r,s])
-    #         evalu.const6[t,r,s] = param.SCEN_PROB[r,s]*param.DURATION[t]*param.VOLL*(1- value(model[:dem_served_flex][t,r,s])/param.LOAD_FLEX)-shadow_price(model[:energy_balance][t,r,s])- shadow_price(model[:max_dem_served_flex][t,r,s])+reduced_cost(model[:dem_served_flex][t,r,s])
-    #
-    #     end
-    # end
+
     evalu.EXPECTED_UNSERVED_DEM = sum(param.SCEN_PROB[r,s] * evalu.UNSERVED_DEM[r,s]  for r in set.PROFILES, s in set.SHIFTERS)
     evalu.CONS_total_SURPLUS = sum(param.SCEN_PROB[r,s] * evalu.CONS_SURPLUS[r,s]  for r in set.PROFILES, s in set.SHIFTERS)
     evalu.model_SURPLUS = sum(param.SCEN_PROB[r,s] * value(model[:surplus][r,s]) for r in set.PROFILES, s in set.SHIFTERS)
@@ -200,14 +142,12 @@ function solve_evaluation(set, param, evalu)
 end
 
 
-INPUT_FPATH = "/Users/hanshu/Desktop/response/code/fail_7.json"
+INPUT_FPATH = "../ercot_data.json"
 set, param, evalu = init_input(INPUT_FPATH)
-# model = solve_dispatch(set, param)
-# JuMP.value.(model[:capacity])
 
 evalu = solve_evaluation(set, param, evalu)
 
-OUTPUT_FPATH = "/Users/hanshu/Desktop/response/data/Diff Failure/7per/Gurobi_complete.json"
+OUTPUT_FPATH = "../Gurobi_complete.json"
 open(OUTPUT_FPATH, "w") do f
     JSON.print(f, evalu,4)
 end
