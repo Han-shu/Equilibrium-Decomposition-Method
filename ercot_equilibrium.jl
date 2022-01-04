@@ -108,9 +108,8 @@
         OPER_PROFIT = Dict()
         PAYOUT = Dict()
         CONTRACT_PRICE = Dict(c => 0.0 for c in set.CONTRACTS)
-
+        # set initial capacity
         CAPACITY = Dict("CCGT" => 77.0449869359021, "w_CCGT" => 0.9472080921646084)
-
         DEM_SERVED_FIX = Dict()
         DEM_SERVED_FLEX = Dict()
         VOL_CONS = Dict(c => 0.0 for c in set.CONTRACTS)
@@ -185,7 +184,7 @@
         ((1 - param.β_CONS) * (var_cons - (1 / param.α_CONS) * (sum(param.SCEN_PROB[r,s] * scen_surplus_aux[r,s] for r in set.PROFILES, s in set.SHIFTERS)))
         + param.β_CONS * (sum(param.SCEN_PROB[r,s] * scen_surplus[r,s] for r in set.PROFILES, s in set.SHIFTERS)))
          # - 0.5 * param.γ * (sum((vol_cons[c] + sum(prov_param.VOL_GEN[g,c] for g in set.GENS))^2 for c in set.CONTRACTS)))
-        ) # Mays AMPL model multiplies last term with sum of installed capacities.
+        ) 
 
         @constraint(cons_model, risk_set_cons[r in set.PROFILES, s in set.SHIFTERS],
         (var_cons - scen_surplus[r,s] <= scen_surplus_aux[r,s])
@@ -212,7 +211,7 @@
         ((1 - param.β_GEN[g]) * (var_gen - (1 / param.α_GEN[g]) * (sum(param.SCEN_PROB[r,s] * scen_profit_aux[r,s] for r in set.PROFILES, s in set.SHIFTERS)))
         + param.β_GEN[g] * (sum(param.SCEN_PROB[r,s] * scen_profit[r,s] for r in set.PROFILES, s in set.SHIFTERS))
         - 0.5 * param.γ * (sum((prov_param.VOL_CONS[c] + vol_gen[c] + sum(prov_param.VOL_GEN[q,c] for q in filter(x->x != g, set.GENS)))^2 for c in set.CONTRACTS)))
-        ) # Mays AMPL model has β_CONS in second term and sums over all generators in first and second term.
+        )
 
         @constraint(gen_model, risk_set_gen[r in set.PROFILES, s in set.SHIFTERS],
         (var_gen - scen_profit[r,s] <= scen_profit_aux[r,s])
@@ -307,7 +306,7 @@
     end
 
     function solve_equilibrium(set, param, initial)
-        FPATH = "/Users/hanshu/Desktop/response/data/Diff Failure/9per/intermediate_equ.json"
+        FPATH = "../intermediate_equ.json"
         finish = false
         avg_profit = nothing
         step = 1e-3
@@ -364,12 +363,9 @@
             while imbalance > ϵ
 
                 println("Iteration: ", prov_param.ITERATION , " Imbalance: ", imbalance)
-                # println("Gen objective: ", prov_param.GEN_objective)
                 print(prov_param.ITERATION,  " \t", prov_param.CAPACITY, " \n")
-                # print(prov_param.ITERATION, " \t", shadow_price(dispatch_model[:energy_balance][1,1,1]),  " \t", shadow_price(dispatch_model[:max_prod]["CCGT",94,2,10]), " \n")
                 gen_model = solve_gen(set, param, prov_param)
                 prov_param.VOL_GEN = Dict((g, c) => value(gen_model[g][:vol_gen][c]) for g in set.GENS, c in set.CONTRACTS)
-                # print("GEN Var value: ", " \t", value(gen_model["CCGT"][:var_gen]), "\t", value(gen_model["w_CCGT"][:var_gen]), "\n")
                 println("Generator volume: ", prov_param.VOL_GEN, "\n")
 
                 cons_model = solve_cons(set, param, prov_param)
@@ -377,7 +373,6 @@
                 println("consumer volume higher bound: ", prov_param.VOL_MAX_CONS, "\n")
                 println("consumer volume: ", value(cons_model[:vol_cons]["HEAT_OPTION"]), "\n")
                 prov_param.VOL_CONS = Dict(c => value(cons_model[:vol_cons][c]) for c in set.CONTRACTS)
-                # println("CONS Var value: ", "\t", value(cons_model[:var_cons]), "\n")
                 println("Consumer volume: ", prov_param.VOL_CONS, "\n")
 
                 difference = Dict(c => (prov_param.VOL_CONS[c] + sum(prov_param.VOL_GEN[g,c] for g in set.GENS)) for c in set.CONTRACTS)
@@ -387,8 +382,6 @@
                 imbalance = maximum(map(x->abs(x), values(difference)))
                 prov_param.GEN_objective = calc_gen_objective(set, param, prov_param, gen_model)
                 println("GEN objective: ", " \t", prov_param.GEN_objective["CCGT"], " \t", prov_param.GEN_objective["w_CCGT"], "\n")
-                # println("GEN Scen surplus: ", value(gen_model["CCGT"][:scen_profit][1,1]), "\n")
-                # println("CONS Scen surplus: ", value(cons_model[:scen_surplus][1,1]), "\n")
             end
 
             prov_param.GEN_objective = calc_gen_objective(set, param, prov_param, gen_model)
@@ -396,8 +389,6 @@
             gen_model = solve_gen(set, param, prov_param)
             cons_model = solve_cons(set, param, prov_param)
 
-            # print("F CONS Var value: ", "\t", value(cons_model[:var_cons]), "\n")
-            # print("F GEN Var value: ", " \t", value(gen_model["CCGT"][:var_gen]), "\t", value(gen_model["w_CCGT"][:var_gen]), "\n")
             print("F Generstor volume: ", prov_param.VOL_GEN, "\n")
             print("F Consumer volume: ", prov_param.VOL_CONS, "\n")
             print("F GEN objective: ", " \t", prov_param.GEN_objective["CCGT"], " \t", prov_param.GEN_objective["w_CCGT"], "\n")
@@ -408,26 +399,17 @@
             open("/Users/hanshu/Desktop/response/data/Diff Failure/9per/GEN_objective.json", "a") do f
                 println(f, prov_param.ITERATION, " \t", prov_param.GEN_objective["CCGT"],  " \t", prov_param.GEN_objective["w_CCGT"])
             end
-            #
-            # println("Max risk imbalance: ", max_risk_imbalance)
-
-            # step = max_risk_imbalance * 0.5 * 10^-6
-
-            # Mays AMPL implementation calculates max_risk_imbalance as gen_objective times capacity.
+     
             if max_risk_imbalance < 20000
                 step = 1e-2
                 ϵ = 0.3
                 if max_risk_imbalance < 1_000
                     ϵ = 0.1
                     step = 0.02
-                    # if max_risk_imbalance < 3
-                    #     ϵ = 1e-1
-                    #     step = 0.05
                     if max_risk_imbalance < 1e-1
                         finish = true
                         avg_profit = Dict(g => sum(param.SCEN_PROB[r,s] * value(gen_model[g][:scen_profit_aux][r,s]) for r in set.PROFILES, s in set.SHIFTERS) for g in set.GENS)
                     end
-                    # end
                 end
             end
             open(FPATH, "w") do f
@@ -470,7 +452,7 @@
     end
 
 
-    INPUT_FPATH = "/Users/hanshu/Desktop/response/code/fail_9.json"
+    INPUT_FPATH = "../ercot_data.json"
 
     set, param, evalu = init_input(INPUT_FPATH)
 
@@ -478,7 +460,7 @@
 
     evalu = solve_evaluation(set, param, prov_param, evalu)
 
-    OUTPUT_FPATH = "/Users/hanshu/Desktop/response/data/Diff Failure/9per/out_equ_1.0.json"
+    OUTPUT_FPATH = "../out_equ_1.0.json"
     open(OUTPUT_FPATH, "w") do f
         JSON.print(f, evalu,4)
     end
